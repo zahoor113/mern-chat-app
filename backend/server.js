@@ -1,37 +1,42 @@
 const express = require('express');
 const app = express();
 const http = require('http');
-const server = http.createServer(app); // Create HTTP server
+const server = http.createServer(app);
+
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000', // Your frontend
-    methods: ['GET', 'POST']
+    origin: process.env.CLIENT_URL,
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
+
 const authRoutes = require('./routes/authRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+
 dotenv.config();
-app.use(cors());
+
+app.use(cors({
+  origin: process.env.CLIENT_URL,
+  credentials: true
+}));
+
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
 
-// Socket.IO event handling
+// Socket.IO
 io.on('connection', (socket) => {
-  console.log('🔌 A user connected:', socket.id);
+  console.log('🔌 User connected:', socket.id);
 
-  // Receive new message from sender
   socket.on('sendMessage', (data) => {
-    console.log('Message received via socket:', data);
-
-    // Emit message to the receiver
     if (data.receiverUsername) {
       io.emit(`privateMessage:${data.receiverUsername}`, data);
     } else {
@@ -40,16 +45,21 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('A user disconnected:', socket.id);
+    console.log('User disconnected:', socket.id);
   });
 });
+
+// ✅ IMPORTANT FIX HERE
+const PORT = process.env.PORT || 5000;
 
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('MongoDB Connected');
-    server.listen(5000, () => {
-      console.log('Server running on http://localhost:5000');
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
     });
   })
-  .catch(err => console.error('MongoDB connection failed:', err));
+  .catch(err => {
+    console.error('MongoDB connection failed:', err);
+  });
